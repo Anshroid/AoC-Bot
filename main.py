@@ -89,7 +89,7 @@ async def update(ctx: interactions.CommandContext):
 async def link(ctx: interactions.CommandContext, username: str):
     account_data[str(ctx.author.user.id)] = username
     save_data(account_data)
-    print(f"Linked user @{ctx.author.user.name} to name {username}")
+    print(f"Linked user @{ctx.author.name} to name {username}")
     await ctx.send("Linked successfully!", ephemeral=True)
 
 
