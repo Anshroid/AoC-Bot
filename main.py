@@ -130,7 +130,7 @@ async def _update():
     leaderboard_data = requests.get(api_url, cookies=api_cookie).json()
     for id, member in leaderboard_data["members"].items():
         name = member['name']
-        if str(datetime.datetime.today().day - 1
+        if str(datetime.datetime.today().day
                ) in member["completion_day_level"].keys():
 
             if name in account_data.values():
