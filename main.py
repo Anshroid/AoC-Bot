@@ -2,9 +2,13 @@ import os
 import time
 import datetime
 import asyncio
+import logging
+import logging.config
+
 import interactions
 import requests
 import pickle
+
 from keep_alive import keep_alive
 from leaderboard_template import template
 from bidict import UniqueBidict
@@ -15,6 +19,11 @@ interactions.api.models.channel.ChannelType = ChannelType
 
 # Settings
 mock = False
+
+# Logging
+logging.config.fileConfig("logger.conf.ini")
+logger = logging.getLogger("bot")
+
 
 # Bot
 bot = interactions.Client(token=os.environ['BOT_TOKEN'],
@@ -31,7 +40,7 @@ async def announce(message):
             for channel in await guild.get_all_channels():
                 if channel.id == announcement_channel_id:
                     announcement_channel = channel
-    print(message)
+    
     if announcement_channel:
         await announcement_channel.send(message)
 
@@ -89,8 +98,9 @@ async def update(ctx: interactions.CommandContext):
 async def link(ctx: interactions.CommandContext, username: str):
     account_data[str(ctx.author.user.id)] = username
     save_data(account_data)
-    print(f"Linked user @{ctx.author.name} to name {username}")
+    logger.info(f"Linked user @{ctx.author.name} to name {username}")
     await ctx.send("Linked successfully!", ephemeral=True)
+    await _update_roles()
 
 
 # Leaderboard Command
@@ -104,9 +114,9 @@ async def leaderboard(ctx: interactions.CommandContext):
 
     t = interactions.Embed(**template)
     for id, member in sorted(leaderboard_data["members"].items(), key=lambda member: member[1]['local_score'], reverse=True):
-        row = ["✧"] * 25
+        row = ["✴️"] * 25
         for dayno, day in member["completion_day_level"].items():
-            row[int(dayno) - 1] = ("★" if ("2" in day.keys()) else "☆")
+            row[int(dayno) - 1] = ("🌟" if ("2" in day.keys()) else "⭐")
 
         name = member['name']
         if name in account_data.values():
@@ -120,14 +130,36 @@ async def leaderboard(ctx: interactions.CommandContext):
 
 async def _update():
     global last_ping_time, leaderboard_data
-    print("Attempting update...")
+    logger.info("Attempting update...")
     if time.time() - last_ping_time < 15 * 60:
-        print("Update failed.")
+        logger.info("Update failed.")
         return False
     last_ping_time = time.time()
 
     old_leaderboard_data = leaderboard_data
     leaderboard_data = requests.get(api_url, cookies=api_cookie).json()
+
+    await _update_roles()
+
+    for id, member in leaderboard_data["members"].items():
+        if old_leaderboard_data == {}:
+            continue
+        if id in old_leaderboard_data['members'].keys():
+            for dayno, day in member["completion_day_level"].items():
+                for partno, part in sorted(day.items()):
+                    if dayno in old_leaderboard_data['members'][id]['completion_day_level'].keys():
+                        if partno in old_leaderboard_data['members'][id]['completion_day_level'][dayno].keys():
+                            continue
+
+                    logger.info(f"{name} has completed day {dayno} part {partno}!")
+                    await announce(
+                        f"{f'<@{account_data[:name]}>' if name in account_data.values() else name} has completed day {dayno} part {partno}!"
+                    )
+
+    logger.info("Updated successfully!")
+    return True
+
+async def _update_roles():
     for id, member in leaderboard_data["members"].items():
         name = member['name']
         if str(datetime.datetime.today().day
@@ -135,25 +167,9 @@ async def _update():
 
             if name in account_data.values():
                 for guild in bot.guilds:
+                    logger.info(f"Adding role to {name}")
                     await guild.add_member_role(completion_role,
                                                 account_data[:name])
-
-        if old_leaderboard_data == {}:
-            continue
-        if id in old_leaderboard_data['members'].keys():
-            for dayno, day in member["completion_day_level"].items():
-                for partno, part in sorted(day.items()):
-                    if dayno in old_leaderboard_data['members'][id][
-                            'completion_day_level'].keys():
-                        if partno in old_leaderboard_data['members'][id][
-                                'completion_day_level'][dayno].keys():
-                            continue
-                    await announce(
-                        f"{f'<@{account_data[:name]}>' if name in account_data.values() else name} has completed day {dayno} part {partno}!"
-                    )
-    print("Updated successfully!")
-    return True
-
 
 async def periodic_update():
     await asyncio.sleep(5)
@@ -168,7 +184,7 @@ async def periodic_clear_roles():
             datetime.date.today() + datetime.timedelta(days=1),
             datetime.time.min) - datetime.datetime.now()).seconds)
 
-        print("Clearing role...")
+        logger.info("Clearing role...")
         for guild in bot.guilds:
             for member in account_data.keys():
                 await guild.remove_member_role(completion_role, member)
@@ -178,5 +194,8 @@ asyncio.get_event_loop().create_task(periodic_update())
 asyncio.get_event_loop().create_task(periodic_clear_roles())
 
 # Run Bot
-keep_alive()
-bot.start()
+try:
+    keep_alive()
+    bot.start()
+except (Exception, KeyboardInterrupt) as e:
+    logger.exception("Bot encountered an error:")
