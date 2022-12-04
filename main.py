@@ -15,7 +15,6 @@ from bidict import UniqueBidict
 
 # Patch library to include forum channels
 from patch_forums import ChannelType
-
 interactions.api.models.channel.ChannelType = ChannelType
 
 # Settings
@@ -28,13 +27,6 @@ logger = logging.getLogger("bot")
 # Bot
 bot = interactions.Client(token=os.environ['BOT_TOKEN'],
                           default_scope=1033109279399485560)
-# while True:
-#     try:
-#         bot = interactions.Client(token=os.environ['BOT_TOKEN'],
-#                           default_scope=1033109279399485560)
-#         break
-#     except TypeError:
-#         logger.exception("Error in starting bot:")
 completion_role = 1047995823981604884
 announcement_channel_id = "1048108205336698921"
 announcement_channel = None
@@ -177,6 +169,7 @@ async def _update():
 
 async def _update_roles():
     for id, member in leaderboard_data["members"].items():
+        name = member['name']
         if str(datetime.datetime.today().day
                ) in member["completion_day_level"].keys():
 
@@ -219,5 +212,6 @@ def try_start():
     except (Exception, KeyboardInterrupt):
         logger.exception("Bot encountered an error:")
         try_start()
+
 
 try_start()
