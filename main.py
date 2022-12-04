@@ -15,6 +15,7 @@ from bidict import UniqueBidict
 
 # Patch library to include forum channels
 from patch_forums import ChannelType
+
 interactions.api.models.channel.ChannelType = ChannelType
 
 # Settings
@@ -24,10 +25,16 @@ mock = False
 logging.config.fileConfig("logger.conf.ini")
 logger = logging.getLogger("bot")
 
-
 # Bot
 bot = interactions.Client(token=os.environ['BOT_TOKEN'],
                           default_scope=1033109279399485560)
+# while True:
+#     try:
+#         bot = interactions.Client(token=os.environ['BOT_TOKEN'],
+#                           default_scope=1033109279399485560)
+#         break
+#     except TypeError:
+#         logger.exception("Error in starting bot:")
 completion_role = 1047995823981604884
 announcement_channel_id = "1048108205336698921"
 announcement_channel = None
@@ -40,7 +47,7 @@ async def announce(message):
             for channel in await guild.get_all_channels():
                 if channel.id == announcement_channel_id:
                     announcement_channel = channel
-    
+
     if announcement_channel:
         await announcement_channel.send(message)
 
@@ -113,17 +120,21 @@ async def leaderboard(ctx: interactions.CommandContext):
         return
 
     t = interactions.Embed(**template)
-    for id, member in sorted(leaderboard_data["members"].items(), key=lambda member: member[1]['local_score'], reverse=True):
-        row = ["✴️"] * 25
+    for id, member in sorted(leaderboard_data["members"].items(),
+                             key=lambda member: member[1]['local_score'],
+                             reverse=True):
+        row = ["✧"] * 25
         for dayno, day in member["completion_day_level"].items():
-            row[int(dayno) - 1] = ("🌟" if ("2" in day.keys()) else "⭐")
+            row[int(dayno) - 1] = ("★" if ("2" in day.keys()) else "☆")
 
         name = member['name']
         if name in account_data.values():
             name = (await
                     (await
                      ctx.get_guild()).get_member(account_data[:name])).mention
-        t.add_field("\u200b", f"**{name} ({member['local_score']} pts)**\n" + ''.join(row))
+        t.add_field(
+            "\u200b",
+            f"**{name} ({member['local_score']} pts)**\n" + ''.join(row))
 
     await ctx.send(embeds=t, ephemeral=True)
 
@@ -142,16 +153,20 @@ async def _update():
     await _update_roles()
 
     for id, member in leaderboard_data["members"].items():
+        name = member['name']
         if old_leaderboard_data == {}:
             continue
         if id in old_leaderboard_data['members'].keys():
             for dayno, day in member["completion_day_level"].items():
                 for partno, part in sorted(day.items()):
-                    if dayno in old_leaderboard_data['members'][id]['completion_day_level'].keys():
-                        if partno in old_leaderboard_data['members'][id]['completion_day_level'][dayno].keys():
+                    if dayno in old_leaderboard_data['members'][id][
+                            'completion_day_level'].keys():
+                        if partno in old_leaderboard_data['members'][id][
+                                'completion_day_level'][dayno].keys():
                             continue
 
-                    logger.info(f"{name} has completed day {dayno} part {partno}!")
+                    logger.info(
+                        f"{name} has completed day {dayno} part {partno}!")
                     await announce(
                         f"{f'<@{account_data[:name]}>' if name in account_data.values() else name} has completed day {dayno} part {partno}!"
                     )
@@ -159,9 +174,9 @@ async def _update():
     logger.info("Updated successfully!")
     return True
 
+
 async def _update_roles():
     for id, member in leaderboard_data["members"].items():
-        name = member['name']
         if str(datetime.datetime.today().day
                ) in member["completion_day_level"].keys():
 
@@ -170,6 +185,7 @@ async def _update_roles():
                     logger.info(f"Adding role to {name}")
                     await guild.add_member_role(completion_role,
                                                 account_data[:name])
+
 
 async def periodic_update():
     await asyncio.sleep(5)
@@ -194,8 +210,14 @@ asyncio.get_event_loop().create_task(periodic_update())
 asyncio.get_event_loop().create_task(periodic_clear_roles())
 
 # Run Bot
-try:
-    keep_alive()
-    bot.start()
-except (Exception, KeyboardInterrupt) as e:
-    logger.exception("Bot encountered an error:")
+keep_alive()
+
+
+def try_start():
+    try:
+        bot.start()
+    except (Exception, KeyboardInterrupt):
+        logger.exception("Bot encountered an error:")
+        try_start()
+
+try_start()
