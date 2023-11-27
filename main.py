@@ -15,6 +15,7 @@ from bidict import UniqueBidict
 
 # Patch library to include forum channels
 from patch_forums import ChannelType
+
 interactions.api.models.channel.ChannelType = ChannelType
 
 # Settings
@@ -78,7 +79,7 @@ account_data = UniqueBidict(load_data())
 async def update(ctx: interactions.CommandContext):
     if not await _update():
         await ctx.send(
-            "A request can only be sent to the API every 15 minutes!",
+            f"A request can only be sent to the API every 15 minutes! Try again <t:{int(last_ping_time + 15 * 60)}:R>",
             ephemeral=True)
     else:
         await ctx.send("Successfully updated leaderboard data!")
@@ -115,7 +116,7 @@ async def leaderboard(ctx: interactions.CommandContext):
     for id, member in sorted(leaderboard_data["members"].items(),
                              key=lambda member: member[1]['local_score'],
                              reverse=True):
-        row = ["✧"] * 25
+        row = ["●"] * 25
         for dayno, day in member["completion_day_level"].items():
             row[int(dayno) - 1] = ("★" if ("2" in day.keys()) else "☆")
 
@@ -157,10 +158,9 @@ async def _update():
                                 'completion_day_level'][dayno].keys():
                             continue
 
-                    logger.info(
-                        f"{name} has completed day {dayno} part {partno}!")
+                    logger.info(f"{name} completed day {dayno} part {partno}!")
                     await announce(
-                        f"{f'<@{account_data[:name]}>' if name in account_data.values() else name} has completed day {dayno} part {partno}!"
+                        f"{f'<@{account_data[:name]}>' if name in account_data.values() else name} completed day {dayno} part {partno} <t:{leaderboard_data['members'][id]['completion_day_level'][dayno][partno]['get_star_ts']}:R>!"
                     )
 
     logger.info("Updated successfully!")
@@ -181,22 +181,22 @@ async def _update_roles():
 
 
 async def periodic_update():
-    await asyncio.sleep(5)
+    await asyncio.sleep(10)
     while True:
         await _update()
         await asyncio.sleep(45 * 60)
 
 
 async def periodic_clear_roles():
+    await asyncio.sleep(5)
     while True:
-        await asyncio.sleep((datetime.datetime.combine(
-            datetime.date.today() + datetime.timedelta(days=1),
-            datetime.time.min) - datetime.datetime.now()).seconds)
-
         logger.info("Clearing role...")
         for guild in bot.guilds:
             for member in account_data.keys():
                 await guild.remove_member_role(completion_role, member)
+        await asyncio.sleep((datetime.datetime.combine(
+            datetime.date.today() + datetime.timedelta(days=1),
+            datetime.time.min) - datetime.datetime.now()).seconds)
 
 
 asyncio.get_event_loop().create_task(periodic_update())
